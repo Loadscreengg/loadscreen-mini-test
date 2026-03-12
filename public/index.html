@@ -396,6 +396,41 @@
       cursor: default;
       pointer-events: none;
     }
+
+    /* Task 5: Department Salary Pie Chart  */
+    .chart-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-top: 20px; /* spacing below stats row */
+    }
+
+    /* Task 4: top margin to separate chart card from table card */
+    .table-wrap { margin-top: 20px; }
+    .chart-card h2 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+      margin-bottom: 20px;
+    }
+    /* Task 5: Flex row — canvas (pie) centered left, legend right */
+    .chart-body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 48px;
+      flex-wrap: wrap;
+    }
+   
+    #salaryChart { display: block; flex-shrink: 0; }
+    /* Task 5: HTML legend — each row is a colored dot + text */
+    .chart-legend { display: flex; flex-direction: column; gap: 10px; }
+    .legend-item  { display: flex; align-items: center; gap: 10px; font-size: 0.88rem; color: #1a1a2e; }
+    .legend-dot   { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .legend-text  { white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -491,6 +526,15 @@
     </form>
   </div>
 
+  <!-- Task 5: Salary by Department pie chart -->
+  <div class="chart-card">
+    <h2>Salary by Department</h2>
+    <div class="chart-body">
+      <canvas id="salaryChart" width="220" height="220"></canvas>
+      <div class="chart-legend" id="chartLegend"></div>
+    </div>
+  </div>
+
   <div class="table-wrap">
     <table>
       <thead>
@@ -530,6 +574,16 @@
   };
 
   const AVATAR_COLORS = ['#e63946','#2196f3','#4caf50','#ff9800','#9c27b0','#00bcd4','#795548','#607d8b','#f06292','#26a69a'];
+
+  // Task 5: Fixed palette cycled with index % length — safe for any number of departments
+  const CHART_PALETTE = [
+    '#2563eb', // blue
+    '#f97316', // orange
+    '#16a34a', // green
+    '#9333ea', // purple
+    '#db2777', // pink
+    '#eab308', // yellow
+  ];
 
   let sortCol = 'id';
   let sortOrder = 'asc';
@@ -614,23 +668,6 @@
 
     // Task 4: refresh Prev/Next state and page indicator after every render
     updatePagination(total);
-  }
-
-  // Task 4: Update pagination controls; hide bar entirely when all results fit on one page
-  function updatePagination(total) {
-    const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
-    const bar = document.getElementById('pagination');
-    bar.style.display = totalPages > 1 ? 'flex' : 'none';
-    document.getElementById('btnPrev').disabled     = currentPage <= 1;
-    document.getElementById('btnNext').disabled     = currentPage >= totalPages;
-    document.getElementById('pageIndicator').textContent = `Page ${currentPage} of ${totalPages}`;
-  }
-
-  // Task 4: Change page and re-render current allEmployees slice (no re-fetch needed)
-  function goToPage(page) {
-    const totalPages = Math.ceil(allEmployees.length / PAGE_SIZE) || 1;
-    currentPage = Math.max(1, Math.min(page, totalPages));
-    renderTable(allEmployees);
   }
 
   function updateSortHeaders() {
@@ -780,7 +817,8 @@
 
       if (res.ok) {
         hideEmployeeForm();
-        loadEmployees(); // refresh table and stats
+        loadEmployees();    // refresh table and stats
+        loadSalaryChart();  // Task 5: salary totals changed — redraw chart
       } else {
         const data = await res.json();
         msg.textContent = data.error || 'Failed to save employee';
@@ -808,16 +846,122 @@
     hideDeleteModal();
     const res = await fetch(`/api/employees/${id}`, { method: 'DELETE' });
     if (res.ok) {
-      loadEmployees(); // refresh table and stats
+      loadEmployees();    // refresh table and stats
+      loadSalaryChart();  // Task 5: salary totals changed — redraw chart
     } else {
       const data = await res.json();
       alert(data.error || 'Failed to delete employee');
     }
   }
 
+  // Task 4: Update pagination controls
+  function updatePagination(total) {
+    const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+    const bar = document.getElementById('pagination');
+    //Hide bar - one page
+    bar.style.display = totalPages > 1 ? 'flex' : 'none';
+    document.getElementById('btnPrev').disabled     = currentPage <= 1;
+    document.getElementById('btnNext').disabled     = currentPage >= totalPages;
+    document.getElementById('pageIndicator').textContent = `Page ${currentPage} of ${totalPages}`;
+  }
+
+  // Task 4: Change page + re-render current allEmployees
+  function goToPage(page) {
+    const totalPages = Math.ceil(allEmployees.length / PAGE_SIZE) || 1;
+    currentPage = Math.max(1, Math.min(page, totalPages));
+    renderTable(allEmployees);
+  }
+
+  // Task 5: Build a color array once — shared by pie + legend to guarantee they match.
+  // Known departments reuse DEPT_COLORS[dept][1] (same vivid accent as badge).
+  // Unknown departments cycle through CHART_PALETTE; fi tracks only unknowns so
+  // adding a new known dept never shifts the fallback index for existing unknowns.
+  function buildChartColors(data) {
+    let fi = 0;
+    return data.map(d => {
+      const known = DEPT_COLORS[d.department];
+      return known ? known[1] : CHART_PALETTE[fi++ % CHART_PALETTE.length];
+    });
+  }
+
+  // Task 5: Fetch salary aggregates, compute grandTotal + colors once, delegate to renderers
+  async function loadSalaryChart() {
+    const res  = await fetch('/api/salary-by-department');
+    const data = await res.json();
+    // Filter out rows with missing/invalid values before rendering
+    const valid      = data.filter(d => d.department && Number.isFinite(d.total) && d.total > 0);
+    const grandTotal = valid.reduce((s, d) => s + d.total, 0); // computed once, shared below
+    const colors     = buildChartColors(valid);
+    drawPieChart(document.getElementById('salaryChart'), valid, colors, grandTotal);
+    renderChartLegend(valid, colors, grandTotal);
+  }
+
+  // Task 5: Draw only the pie slices onto the canvas — no legend, no text
+  function drawPieChart(canvas, data, colors, grandTotal) {
+    const dpr  = window.devicePixelRatio || 1;
+    const SIZE = 220; // logical canvas size (square)
+
+    canvas.width        = SIZE * dpr;
+    canvas.height       = SIZE * dpr;
+    canvas.style.width  = SIZE + 'px';
+    canvas.style.height = SIZE + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, SIZE, SIZE); // always clear before drawing
+
+    // Guard: no data or all-zero salaries — show a placeholder message
+    if (!data.length || grandTotal === 0) {
+      ctx.fillStyle = '#aaa';
+      ctx.font      = '13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('No salary data available', SIZE / 2, SIZE / 2);
+      return;
+    }
+
+    const cx = SIZE / 2, cy = SIZE / 2, r = 90; // pie centered in canvas
+    let angle = -Math.PI / 2; // start from 12 o'clock
+
+    // Stroke style is constant across all slices — set once outside the loop
+    ctx.strokeStyle = '#fff'; // white divider between slices
+    ctx.lineWidth   = 2;
+
+    data.forEach((d, i) => {
+      const sweep = (d.total / grandTotal) * 2 * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, angle, angle + sweep);
+      ctx.closePath();
+      ctx.fillStyle = colors[i];
+      ctx.fill();
+      ctx.stroke();
+      angle += sweep;
+    });
+  }
+
+  // Task 5: Render legend as HTML — grandTotal passed in, no redundant recompute
+  function renderChartLegend(data, colors, grandTotal) {
+    const legend = document.getElementById('chartLegend');
+
+    if (!data.length || grandTotal === 0) {
+      legend.innerHTML = '';
+      return;
+    }
+
+    legend.innerHTML = data.map((d, i) => {
+      const pct = ((d.total / grandTotal) * 100).toFixed(1);
+      return `
+        <div class="legend-item">
+          <span class="legend-dot" style="background:${colors[i]}"></span>
+          <span class="legend-text">${d.department} — ${pct}% · ${formatSalary(d.total)}</span>
+        </div>`;
+    }).join('');
+  }
+
   updateSortHeaders();
   loadDepartments();
   loadEmployees();
+  loadSalaryChart(); // Task 5: initial chart render
 </script>
 
 <!-- Task 3: Delete confirmation modal — outside container so it overlays everything -->

@@ -99,6 +99,14 @@ app.delete('/api/employees/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// Task 5 — Salary by Department - aggregate total salary per department
+app.get('/api/salary-by-department', (_req, res) => {
+  const rows = db.prepare(
+    'SELECT department, SUM(salary) AS total FROM employees GROUP BY department ORDER BY department'
+  ).all();
+  res.json(rows); // [{ department, total }, …]
+});
+
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });

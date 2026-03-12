@@ -1,8 +1,8 @@
-# Implementation Notes — Tasks 1, 2, 3 & 4
+# Implementation Notes — Tasks 1, 2, 3, 4 & 5
 
 ## Overview
 
-Tasks 1–4 are built as a unified CRUD layer with pagination on top of the existing read-only Employee Directory. All four share a single, consistent design philosophy:
+Tasks 1–5 are built as a unified CRUD layer with pagination and data visualisation on top of the existing read-only Employee Directory. All five share a single, consistent design philosophy:
 
 - **One form panel** handles both Add and Edit (no duplicated HTML).
 - **One modal** handles the Delete confirmation.
@@ -259,3 +259,103 @@ Search, department filter, and column sort all funnel through `loadEmployees()`.
 
 **Why clamp inside `renderTable()` rather than inside `goToPage()`?**
 `renderTable` is the only place where page-out-of-bounds can occur from an external cause (a search that reduces the result count while the user is on page 3). Centralising the clamp there means `goToPage` can stay simple and `loadEmployees` doesn't need to know about pagination internals.
+
+---
+
+## Task 5 — Department Salary Pie Chart
+
+### Backend: `GET /api/salary-by-department`
+
+**Data flow:**
+```
+Client requests chart data
+  → GET /api/salary-by-department
+    → SELECT department, SUM(salary) AS total
+        FROM employees
+        GROUP BY department
+        ORDER BY department
+      → 200 OK  [{ department, total }, …]
+```
+
+Single SQL aggregate query — no application-layer grouping needed. The result is always the full dataset (no search/filter params), making the chart a global overview independent of the current table filter.
+
+### Frontend
+
+**When the chart loads / refreshes:**
+
+```
+Page init
+  → loadSalaryChart() → GET /api/salary-by-department → drawPieChart()
+
+Add / Edit success (submitEmployeeForm)
+  → loadEmployees() + loadSalaryChart()   ← salary totals may have changed
+
+Delete success (confirmDelete)
+  → loadEmployees() + loadSalaryChart()   ← employee removed, totals change
+```
+
+Search and department filter do **not** trigger `loadSalaryChart()` — they don't mutate data, so the chart is unchanged.
+
+**Color resolution — `buildChartColors(data)` + `sliceColor(dept, fallbackIndex)`:**
+
+Colors are computed once in `loadSalaryChart()` and passed as a shared array to both `drawPieChart` and `renderChartLegend`, guaranteeing pie slices and legend dots are always in sync.
+
+```
+For each department in data:
+  dept in DEPT_COLORS?
+    → yes: use DEPT_COLORS[dept][1]           ← vivid text-color (same as badge accent)
+    → no:  use CHART_PALETTE[fi++ % 6]        ← cycle fallback palette for unknown depts
+```
+
+`fi` counts only unknown departments independently, so adding a new known department never shifts the fallback index for other unknowns.
+
+**`loadSalaryChart()`** — orchestrator:
+1. Fetches `/api/salary-by-department`.
+2. Filters out rows with missing or non-finite values.
+3. Calls `buildChartColors(valid)` — single color computation shared by both renderers.
+4. Delegates to `drawPieChart(canvas, valid, colors)` and `renderChartLegend(valid, colors)`.
+
+**`drawPieChart(canvas, data, colors)`** — pure canvas rendering, no library:
+1. **HiDPI scaling**: sets `canvas.width/height` to `220 × devicePixelRatio`, then `ctx.scale(dpr, dpr)` — ensures crisp edges on Retina/4K screens.
+2. **Guard**: if `data` is empty or `grandTotal === 0`, renders a "No salary data available" placeholder and returns early.
+3. **Pie slices**: iterates `data`, calculates `sweep = (total / grandTotal) × 2π`, draws each slice with `ctx.arc()`, separates them with a 2px white stroke. Colors come from the pre-built `colors` array.
+
+**`renderChartLegend(data, colors)`** — HTML legend, not canvas:
+- Injects one `<div class="legend-item">` per department into `#chartLegend`.
+- Each row: color dot (`.legend-dot`) + `"Department — X.X% · $NNN,NNN"`.
+- Rendering in HTML (not canvas) avoids text scaling issues and keeps labels selectable/accessible.
+
+### HTML structure
+
+```
+.chart-card
+  └── h2                             ← "SALARY BY DEPARTMENT"
+  └── .chart-body                    ← flex row, align-items: center, gap: 40px
+        ├── canvas#salaryChart       ← 220×220 logical px, pie only (no text)
+        └── .chart-legend#chartLegend ← HTML legend list, injected by renderChartLegend
+```
+
+Canvas sits on the left, legend on the right. `.chart-body` uses `justify-content: center` so the pie is visually centered in the card. `flex-wrap: wrap` lets the legend drop below on narrow viewports.
+
+### CSS
+
+| Rule | Purpose |
+|---|---|
+| `.chart-body { display: flex; align-items: center; justify-content: center; gap: 40px; flex-wrap: wrap }` | Centers pie + legend as a unit; wraps on narrow screens. |
+| `.legend-item { display: flex; align-items: center; gap: 10px }` | Aligns dot and text in each legend row. |
+| `.legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0 }` | Colored square matching slice color; square corners (not circle) match the badge style. |
+| `.legend-text { white-space: nowrap }` | Prevents line breaks inside a legend entry. |
+
+### Key design decisions
+
+**Why pure Canvas, no SVG or library?**
+Task requirement. Canvas is also a single DOM element with no children, keeping the HTML clean. All drawing logic is self-contained in `drawPieChart`.
+
+**Why derive slice colors from `DEPT_COLORS` instead of a separate palette?**
+`DEPT_COLORS` already defines the vivid accent color for each known department (used by table badges). Reusing `DEPT_COLORS[dept][1]` in the chart creates a consistent visual language without duplicating color definitions — Engineering is always `#1565c0`, Marketing always `#c2185b`, in both badges and chart slices. `CHART_PALETTE` exists only as a graceful fallback for departments added after deployment.
+
+**Why compute colors once in `loadSalaryChart()` and pass the array down?**
+If `drawPieChart` and `renderChartLegend` each resolved colors independently, any subtle difference in execution order (e.g. `fi++` count diverging) would cause pie slices and legend dots to mismatch. A single `buildChartColors` call produces one authoritative array shared by both renderers, making color consistency structurally guaranteed rather than coincidental.
+
+**Why call `loadSalaryChart()` separately from `loadEmployees()`?**
+The chart endpoint returns a global aggregate unaffected by search or filter. Tying it to `loadEmployees()` would re-fetch chart data on every keystroke. Instead it is called only at init and after data mutations (add, edit, delete), keeping network traffic minimal.
