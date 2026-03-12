@@ -235,7 +235,7 @@
       .form-grid { grid-template-columns: 1fr; }
     }
 
-    /* Task 1: Add Employee */
+    /* Task 1: Add Employee - Add Employee Button */
     .btn-primary {
       padding: 10px 18px;
       background: #0f3460;
@@ -264,6 +264,7 @@
     }
     .btn-secondary:hover { background: #f5f5f5; }
 
+    /* Task 1 & 2: Add/Edit Employee - Add/Edit Employee Form */
     .add-form-panel {
       background: white;
       border-radius: 12px;
@@ -322,6 +323,79 @@
     }
     .form-message.error   { background: #fce4ec; color: #c2185b; display: block; }
     .form-message.success { background: #e8f5e9; color: #2e7d32; display: block; }
+
+    /* Task 2: Edit Employee - Edit button */
+    .btn-edit {
+      padding: 5px 12px;
+      font-size: 0.8rem;
+      background: white;
+      color: #0f3460;
+      border: 1.5px solid #0f3460;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .btn-edit:hover { background: #e8f0fe; }
+
+    /* Task 3: Delete Employee - Delete button, matches existing error color */
+    .btn-delete {
+      padding: 5px 12px;
+      font-size: 0.8rem;
+      background: white;
+      color: #c2185b;
+      border: 1.5px solid #c2185b;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .btn-delete:hover { background: #fce4ec; }
+
+    /* Task 3: Delete confirmation modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;                          /* covers entire viewport */
+      background: rgba(0,0,0,0.4);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 12px;
+      padding: 28px 32px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      max-width: 400px;
+      width: 90%;
+    }
+    .modal h3 { font-size: 1rem; font-weight: 700; color: #1a1a2e; margin-bottom: 8px; }
+    .modal p  { font-size: 0.88rem; color: #666; margin-bottom: 24px; }
+
+    /* Task 4: Pagination bar */
+    .pagination {
+      display: none; /* shown via JS only when totalPages > 1 */
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 14px 20px;
+      border-top: 1px solid #f0f0f0;
+    }
+    .pagination #pageIndicator {
+      font-size: 0.85rem;
+      color: #666;
+      min-width: 110px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    /* Task 4: Dim disabled Prev/Next buttons instead of hiding them — preserves layout */
+    .pagination button:disabled {
+      opacity: 0.4;
+      cursor: default;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -365,22 +439,24 @@
     <select id="deptFilter">
       <option value="all">All Departments</option>
     </select>
-    <!-- Task 1: Add Employee - button -->
     <span id="resultCount"></span>
+    <!-- Task 1: Add Employee - button -->
     <button class="btn-primary" onclick="showAddForm()">Add Employee</button>
   </div>
 
-  <!-- Task 1: Add Employee - form information -->
-  <div class="add-form-panel" id="addFormPanel" style="display:none">
-    <h2>Add New Employee</h2>
+  <!-- Task 1 & 2: Shared Add/Edit form — title and submit button text set dynamically -->
+  <div class="add-form-panel" id="employeeFormPanel" style="display:none">
+    <h2 id="formTitle">Add New Employee</h2>
     <div class="form-message" id="formMessage"></div>
-    <form onsubmit="submitAddEmployee(event)">
+    <form onsubmit="submitEmployeeForm(event)">
+      <!-- empty = add mode; populated = edit mode (stores employee id) -->
+      <input type="hidden" id="fEditId" />
       <div class="form-grid">
         <div class="form-group">
           <label>Name *</label>
           <input type="text" id="fName" required placeholder="Full name" />
         </div>
-        <!-- Task 1: Add Employee - select department to ensure data consistency  -->
+        <!-- select (not free-text) to ensure department name consistency across records -->
         <div class="form-group">
           <label>Department *</label>
           <select id="fDepartment" required>
@@ -409,8 +485,8 @@
         </div>
       </div>
       <div class="form-actions">
-        <button type="button" class="btn-secondary" onclick="hideAddForm()">Cancel</button>
-        <button type="submit" class="btn-primary">Save Employee</button>
+        <button type="button" class="btn-secondary" onclick="hideEmployeeForm()">Cancel</button>
+        <button type="submit" class="btn-primary" id="formSubmitBtn">Save Employee</button>
       </div>
     </form>
   </div>
@@ -425,12 +501,21 @@
           <th data-col="position">Position <span class="sort-icon">▲</span></th>
           <th data-col="hire_date">Hire Date <span class="sort-icon">▲</span></th>
           <th data-col="salary">Salary <span class="sort-icon">▲</span></th>
+          <!-- Task 2: Edit Employee - Edit column -->
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody id="tableBody">
-        <tr id="loadingRow"><td colspan="6">Loading employees…</td></tr>
+        <!-- Task 2: Edit Employee - Edit column -->
+        <tr id="loadingRow"><td colspan="7">Loading employees…</td></tr>
       </tbody>
     </table>
+    <!-- Task 4: Pagination controls — Previous / Page X of Y / Next -->
+    <div class="pagination" id="pagination">
+      <button class="btn-secondary" id="btnPrev" onclick="goToPage(currentPage - 1)">&#8592; Previous</button>
+      <span id="pageIndicator">Page 1 of 1</span>
+      <button class="btn-secondary" id="btnNext" onclick="goToPage(currentPage + 1)">Next &#8594;</button>
+    </div>
   </div>
 
 </div>
@@ -449,6 +534,10 @@
   let sortCol = 'id';
   let sortOrder = 'asc';
   let allEmployees = [];
+
+  // Task 4: Pagination state — currentPage resets to 1 on any filter/sort change
+  const PAGE_SIZE = 5;
+  let currentPage = 1;
 
   function avatarColor(name) {
     let h = 0;
@@ -476,10 +565,11 @@
 
   function renderTable(employees) {
     const tbody = document.getElementById('tableBody');
-    document.getElementById('resultCount').textContent = `${employees.length} result${employees.length !== 1 ? 's' : ''}`;
+    const total = employees.length;
+    document.getElementById('resultCount').textContent = `${total} result${total !== 1 ? 's' : ''}`;
 
-    if (employees.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6">
+    if (total === 0) {
+      tbody.innerHTML = `<tr><td colspan="7">
         <div class="empty-state">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
@@ -487,10 +577,18 @@
           <p>No employees match your search.</p>
         </div>
       </td></tr>`;
+      // Task 4: no results — hide pagination
+      updatePagination(0);
       return;
     }
 
-    tbody.innerHTML = employees.map(emp => `
+    // Task 4: clamp currentPage then slice to the rows for this page
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+    if (currentPage > totalPages) currentPage = totalPages;
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const pageRows = employees.slice(start, start + PAGE_SIZE);
+
+    tbody.innerHTML = pageRows.map(emp => `
       <tr>
         <td style="color:#aaa;font-size:0.82rem">#${emp.id}</td>
         <td>
@@ -506,8 +604,33 @@
         <td>${emp.position}</td>
         <td>${formatDate(emp.hire_date)}</td>
         <td style="font-weight:600">${formatSalary(emp.salary)}</td>
+        <!-- Task 2 & 3: Edit / Delete buttons -->
+        <td style="display:flex;gap:6px">
+          <button class="btn-edit"   onclick="openEditForm(${emp.id})">Edit</button>
+          <button class="btn-delete" onclick="deleteEmployee(${emp.id}, '${emp.name.replace(/'/g, "\\'")}')">Delete</button>
+        </td>
       </tr>
     `).join('');
+
+    // Task 4: refresh Prev/Next state and page indicator after every render
+    updatePagination(total);
+  }
+
+  // Task 4: Update pagination controls; hide bar entirely when all results fit on one page
+  function updatePagination(total) {
+    const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+    const bar = document.getElementById('pagination');
+    bar.style.display = totalPages > 1 ? 'flex' : 'none';
+    document.getElementById('btnPrev').disabled     = currentPage <= 1;
+    document.getElementById('btnNext').disabled     = currentPage >= totalPages;
+    document.getElementById('pageIndicator').textContent = `Page ${currentPage} of ${totalPages}`;
+  }
+
+  // Task 4: Change page and re-render current allEmployees slice (no re-fetch needed)
+  function goToPage(page) {
+    const totalPages = Math.ceil(allEmployees.length / PAGE_SIZE) || 1;
+    currentPage = Math.max(1, Math.min(page, totalPages));
+    renderTable(allEmployees);
   }
 
   function updateSortHeaders() {
@@ -515,6 +638,7 @@
       const col = th.dataset.col;
       th.classList.toggle('active', col === sortCol);
       const icon = th.querySelector('.sort-icon');
+      if (!icon) return; // Task 2: skip Actions column (no sort icon)
       if (col === sortCol) {
         icon.textContent = sortOrder === 'asc' ? '▲' : '▼';
       } else {
@@ -541,6 +665,7 @@
     const params = new URLSearchParams({ search, department, sort: sortCol, order: sortOrder });
     const res = await fetch(`/api/employees?${params}`);
     allEmployees = await res.json();
+    currentPage = 1; // Task 4: any filter/search/sort change always resets to page 1
     renderTable(allEmployees);
 
     if (department === 'all' && !search) {
@@ -572,69 +697,121 @@
 
   document.getElementById('deptFilter').addEventListener('change', loadEmployees);
 
-  // Task 1 — Add Employee - Populate form department dropdown using existing GET /api/departments
-  async function populateFormDepts() {
+  // Task 1 & 2 — Shared: populate department dropdown
+  async function populateFormDepts(selected = '') {
     const res = await fetch('/api/departments');
     const depts = await res.json();
     const sel = document.getElementById('fDepartment');
-    // clear before repopulating
-    while (sel.options.length > 1) sel.remove(1); 
+    while (sel.options.length > 1) sel.remove(1); // clear before repopulating
     depts.forEach(d => {
       const opt = document.createElement('option');
       opt.value = d; opt.textContent = d;
+      if (d === selected) opt.selected = true;//edit mode: pre-select current department
       sel.appendChild(opt);
     });
   }
 
+  // Task 1 — Add Employee: open shared form in add mode
   function showAddForm() {
-    const panel = document.getElementById('addFormPanel');
+    document.getElementById('formTitle').textContent     = 'Add New Employee';
+    document.getElementById('formSubmitBtn').textContent = 'Save Employee';
+    document.getElementById('fEditId').value = ''; // empty = add mode
     document.getElementById('formMessage').className = 'form-message';
+    const panel = document.getElementById('employeeFormPanel');
     panel.style.display = 'block';
     populateFormDepts();
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function hideAddForm() {
-    const panel = document.getElementById('addFormPanel');
+  // Task 1 & 2 — Shared: hide and reset form
+  function hideEmployeeForm() {
+    const panel = document.getElementById('employeeFormPanel');
     panel.style.display = 'none';
     panel.querySelector('form').reset();
   }
 
-  async function submitAddEmployee(event) {
+  // Task 2 — Edit Employee: open shared form in edit mode, pre-filled with row data
+  function openEditForm(id) {
+    const emp = allEmployees.find(e => e.id === id);
+    if (!emp) return;
+    document.getElementById('formTitle').textContent     = 'Edit Employee';
+    document.getElementById('formSubmitBtn').textContent = 'Save Changes';
+    document.getElementById('formMessage').className = 'form-message';
+    document.getElementById('fEditId').value   = emp.id; // non-empty = edit mode
+    document.getElementById('fName').value     = emp.name;
+    document.getElementById('fPosition').value = emp.position;
+    document.getElementById('fEmail').value    = emp.email;
+    document.getElementById('fPhone').value    = emp.phone;
+    document.getElementById('fHireDate').value = emp.hire_date;
+    document.getElementById('fSalary').value   = emp.salary;
+    populateFormDepts(emp.department);
+    const panel = document.getElementById('employeeFormPanel');
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Task 1 & 2 — Shared submit: POST (add) when fEditId empty, PUT (edit) when fEditId set
+  async function submitEmployeeForm(event) {
     event.preventDefault();
-    const msg = document.getElementById('formMessage');
+    const msg    = document.getElementById('formMessage');
+    const editId = document.getElementById('fEditId').value;
     msg.className = 'form-message';
 
     const body = {
-      name:      document.getElementById('fName').value.trim(),
-      department:document.getElementById('fDepartment').value,
-      position:  document.getElementById('fPosition').value.trim(),
-      email:     document.getElementById('fEmail').value.trim(),
-      phone:     document.getElementById('fPhone').value.trim(),
-      hire_date: document.getElementById('fHireDate').value,
-      salary:    Number(document.getElementById('fSalary').value),
+      name:       document.getElementById('fName').value.trim(),
+      department: document.getElementById('fDepartment').value,
+      position:   document.getElementById('fPosition').value.trim(),
+      email:      document.getElementById('fEmail').value.trim(),
+      phone:      document.getElementById('fPhone').value.trim(),
+      hire_date:  document.getElementById('fHireDate').value,
+      salary:     Number(document.getElementById('fSalary').value),
     };
 
+    // identify add/edit mode by editId
+    const url    = editId ? `/api/employees/${editId}` : '/api/employees';
+    const method = editId ? 'PUT' : 'POST';
+
     try {
-      const res = await fetch('/api/employees', {
-        method: 'POST',
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
       if (res.ok) {
-        hideAddForm();
-        // refresh table and stats
-        loadEmployees(); 
+        hideEmployeeForm();
+        loadEmployees(); // refresh table and stats
       } else {
         const data = await res.json();
-        msg.textContent = data.error || 'Failed to add employee';
+        msg.textContent = data.error || 'Failed to save employee';
         msg.className = 'form-message error';
       }
     } catch (err) {
-      // Catch network errors or unexpected exceptions
       msg.textContent = 'Network error: ' + err.message;
       msg.className = 'form-message error';
+    }
+  }
+
+  // Task 3 — Delete Employee: open confirmation modal
+  function deleteEmployee(id, name) {
+    document.getElementById('modalTitle').textContent  = `Are you sure you want to delete ${name}?`;
+    document.getElementById('modalConfirmBtn').onclick = () => confirmDelete(id);
+    document.getElementById('deleteModal').classList.add('active');
+  }
+
+  function hideDeleteModal() {
+    document.getElementById('deleteModal').classList.remove('active');
+  }
+
+  // Task 3 — Delete Employee: confirmed - call DELETE /api/employees/:id
+  async function confirmDelete(id) {
+    hideDeleteModal();
+    const res = await fetch(`/api/employees/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      loadEmployees(); // refresh table and stats
+    } else {
+      const data = await res.json();
+      alert(data.error || 'Failed to delete employee');
     }
   }
 
@@ -642,6 +819,19 @@
   loadDepartments();
   loadEmployees();
 </script>
+
+<!-- Task 3: Delete confirmation modal — outside container so it overlays everything -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <h3 id="modalTitle">Delete?</h3>
+    <p id="modalBody">This action cannot be undone.</p>
+    <!-- reuse existing btn-secondary and btn-delete classes -->
+    <div class="form-actions">
+      <button class="btn-secondary" onclick="hideDeleteModal()">Cancel</button>
+      <button class="btn-delete"    id="modalConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

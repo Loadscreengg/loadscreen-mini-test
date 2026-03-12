@@ -65,6 +65,40 @@ app.post('/api/employees', (req, res) => {
   }
 });
 
+// Task 2 — Edit Employee - PUT /api/employees/:id
+app.put('/api/employees/:id', (req, res) => {
+  const { id } = req.params;
+  const { name, department, position, email, phone, hire_date, salary } = req.body;
+
+  // Validate required information 
+  if (!name || !department || !position || !email || !phone || !hire_date || !salary) {
+    return res.status(400).json({ error: 'Missing required information' });
+  }
+
+  // Update data
+  try {
+    const result = db.prepare(
+      'UPDATE employees SET name=?, department=?, position=?, email=?, phone=?, hire_date=?, salary=? WHERE id=?'
+    ).run(name, department, position, email, phone, hire_date, Number(salary), id);
+
+    if (result.changes === 0) return res.status(404).json({ error: 'Employee not found' });
+    res.json({ success: true });
+  } catch (err) {
+    if (err.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Email already exists' });
+    }
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Task 3 — Delete Employee - DELETE /api/employees/:id
+app.delete('/api/employees/:id', (req, res) => {
+  const { id } = req.params;
+  const result = db.prepare('DELETE FROM employees WHERE id = ?').run(id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Employee not found' });
+  res.json({ success: true });
+});
+
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
