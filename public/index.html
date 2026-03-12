@@ -232,7 +232,96 @@
       .container { padding: 0 12px; }
       td:nth-child(4), th:nth-child(4),
       td:nth-child(6), th:nth-child(6) { display: none; }
+      .form-grid { grid-template-columns: 1fr; }
     }
+
+    /* Task 1: Add Employee */
+    .btn-primary {
+      padding: 10px 18px;
+      background: #0f3460;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .btn-primary:hover { background: #1565c0; }
+
+    .btn-secondary {
+      padding: 10px 18px;
+      background: white;
+      color: #555;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .btn-secondary:hover { background: #f5f5f5; }
+
+    .add-form-panel {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+    .add-form-panel h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 20px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-group label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+    }
+    /* Scoped to form-group to avoid overriding toolbar select */
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: #0f3460; }
+
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+    .form-message {
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      display: none;
+    }
+    .form-message.error   { background: #fce4ec; color: #c2185b; display: block; }
+    .form-message.success { background: #e8f5e9; color: #2e7d32; display: block; }
   </style>
 </head>
 <body>
@@ -276,7 +365,54 @@
     <select id="deptFilter">
       <option value="all">All Departments</option>
     </select>
+    <!-- Task 1: Add Employee - button -->
     <span id="resultCount"></span>
+    <button class="btn-primary" onclick="showAddForm()">Add Employee</button>
+  </div>
+
+  <!-- Task 1: Add Employee - form information -->
+  <div class="add-form-panel" id="addFormPanel" style="display:none">
+    <h2>Add New Employee</h2>
+    <div class="form-message" id="formMessage"></div>
+    <form onsubmit="submitAddEmployee(event)">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Name *</label>
+          <input type="text" id="fName" required placeholder="Full name" />
+        </div>
+        <!-- Task 1: Add Employee - select department to ensure data consistency  -->
+        <div class="form-group">
+          <label>Department *</label>
+          <select id="fDepartment" required>
+            <option value="">Select department…</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Position *</label>
+          <input type="text" id="fPosition" required placeholder="Job title" />
+        </div>
+        <div class="form-group">
+          <label>Email *</label>
+          <input type="email" id="fEmail" required placeholder="email@example.com" />
+        </div>
+        <div class="form-group">
+          <label>Phone *</label>
+          <input type="text" id="fPhone" required placeholder="e.g. 555-0100" />
+        </div>
+        <div class="form-group">
+          <label>Hire Date *</label>
+          <input type="date" id="fHireDate" required />
+        </div>
+        <div class="form-group">
+          <label>Salary *</label>
+          <input type="number" id="fSalary" required min="0" placeholder="Annual salary" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-secondary" onclick="hideAddForm()">Cancel</button>
+        <button type="submit" class="btn-primary">Save Employee</button>
+      </div>
+    </form>
   </div>
 
   <div class="table-wrap">
@@ -435,6 +571,72 @@
   });
 
   document.getElementById('deptFilter').addEventListener('change', loadEmployees);
+
+  // Task 1 — Add Employee - Populate form department dropdown using existing GET /api/departments
+  async function populateFormDepts() {
+    const res = await fetch('/api/departments');
+    const depts = await res.json();
+    const sel = document.getElementById('fDepartment');
+    // clear before repopulating
+    while (sel.options.length > 1) sel.remove(1); 
+    depts.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d; opt.textContent = d;
+      sel.appendChild(opt);
+    });
+  }
+
+  function showAddForm() {
+    const panel = document.getElementById('addFormPanel');
+    document.getElementById('formMessage').className = 'form-message';
+    panel.style.display = 'block';
+    populateFormDepts();
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function hideAddForm() {
+    const panel = document.getElementById('addFormPanel');
+    panel.style.display = 'none';
+    panel.querySelector('form').reset();
+  }
+
+  async function submitAddEmployee(event) {
+    event.preventDefault();
+    const msg = document.getElementById('formMessage');
+    msg.className = 'form-message';
+
+    const body = {
+      name:      document.getElementById('fName').value.trim(),
+      department:document.getElementById('fDepartment').value,
+      position:  document.getElementById('fPosition').value.trim(),
+      email:     document.getElementById('fEmail').value.trim(),
+      phone:     document.getElementById('fPhone').value.trim(),
+      hire_date: document.getElementById('fHireDate').value,
+      salary:    Number(document.getElementById('fSalary').value),
+    };
+
+    try {
+      const res = await fetch('/api/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        hideAddForm();
+        // refresh table and stats
+        loadEmployees(); 
+      } else {
+        const data = await res.json();
+        msg.textContent = data.error || 'Failed to add employee';
+        msg.className = 'form-message error';
+      }
+    } catch (err) {
+      // Catch network errors or unexpected exceptions
+      msg.textContent = 'Network error: ' + err.message;
+      msg.className = 'form-message error';
+    }
+  }
 
   updateSortHeaders();
   loadDepartments();

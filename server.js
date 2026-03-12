@@ -6,6 +6,7 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
 app.get('/api/employees', (req, res) => {
   const { search, department, sort = 'id', order = 'asc' } = req.query;
@@ -38,6 +39,30 @@ app.get('/api/employees', (req, res) => {
 app.get('/api/departments', (req, res) => {
   const departments = db.prepare('SELECT DISTINCT department FROM employees ORDER BY department').all();
   res.json(departments.map(d => d.department));
+});
+
+//  Task 1 — Add Employee - POST /api/employees
+app.post('/api/employees', (req, res) => {
+  const { name, department, position, email, phone, hire_date, salary } = req.body;
+
+  // Validate required information
+  if (!name || !department || !position || !email || !phone || !hire_date || !salary) {
+    return res.status(400).json({ error: 'Missing required information' });
+  }
+
+  // Insert new employee into the database
+  try {
+    const result = db.prepare(
+      'INSERT INTO employees (name, department, position, email, phone, hire_date, salary) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(name, department, position, email, phone, hire_date, Number(salary));
+    res.status(201).json({ id: result.lastInsertRowid });
+  } catch (err) {
+    // Handle duplicate email (UNIQUE constraint)
+    if (err.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Email already exists' });
+    }
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 app.listen(PORT, () => {
